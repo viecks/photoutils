@@ -13,7 +13,7 @@ import (
 )
 
 func shortUsage(errInfo string) error {
-	str := fmt.Sprintln("usage: pclassify [-h] [-c] [-f] [-m] [-y] [-b] sourcePath [destPath]")
+	str := fmt.Sprintln("usage: pclassify [-h] [-c] [-f] [-m | -y | -b | -d] sourcePath [destPath]")
 	str += fmt.Sprint(errInfo)
 	err := errors.New(str)
 	return err
@@ -36,6 +36,7 @@ func longUsage() {
 	fmt.Println("    -m         classify photos by month(default)")
 	fmt.Println("    -y         classify photos by year")
 	fmt.Println("    -b         classify photos by birthday")
+	fmt.Println("    -d         classify photos by date")
 }
 
 type typeClassifyMode int
@@ -44,6 +45,7 @@ const (
 	monthMode typeClassifyMode = iota
 	yearMode
 	birthdayMode
+	dateMode
 	unknown
 )
 
@@ -59,7 +61,7 @@ func parseArgs() error {
 	remainder := []string{}
 	invalidArg := []string{}
 
-	classifyModeMap := map[string]typeClassifyMode{"-b": birthdayMode, "-m": monthMode, "-y": yearMode}
+	classifyModeMap := map[string]typeClassifyMode{"-b": birthdayMode, "-m": monthMode, "-y": yearMode, "-d": dateMode}
 
 	for idx, arg := range os.Args {
 		if idx == 0 {
@@ -74,7 +76,7 @@ func parseArgs() error {
 			copyMode = true
 		case arg == "-f":
 			fullHashMode = true
-		case arg == "-b" || arg == "-y" || arg == "-m":
+		case arg == "-b" || arg == "-y" || arg == "-m" || arg == "-d":
 			if classifyMode == unknown {
 				classifyMode = classifyModeMap[arg]
 			} else {
@@ -229,6 +231,21 @@ func makeFolderByBirthday(target string, date time.Time, file string) (string, e
 	return folderPath, nil
 }
 
+func makeFolderByDate(target string, date time.Time) (string, error) {
+	dateString := date.Format("2006-01-02")
+	folderPath := filepath.Join(target, dateString)
+
+	if pcopylib.IsFileExist(folderPath) != pcopylib.FileExistStatus_Directory {
+		os.Mkdir(folderPath, os.ModePerm|os.ModeDir)
+	}
+
+	if pcopylib.IsFileExist(folderPath) != pcopylib.FileExistStatus_Directory {
+		return "", errors.New("pclassify: error: make folder by month failed")
+	}
+
+	return folderPath, nil
+}
+
 func classify(file, target string, copyMode, fullHashMode bool, classifyMode typeClassifyMode) error {
 	err, date := getDateFromExif(file)
 	if err != nil {
@@ -247,6 +264,8 @@ func classify(file, target string, copyMode, fullHashMode bool, classifyMode typ
 		folderPath, err = makeFolderByYear(target, date)
 	case birthdayMode:
 		folderPath, err = makeFolderByBirthday(target, date, file)
+	case dateMode:
+		folderPath, err = makeFolderByDate(target, date)
 	}
 
 	if err != nil {
